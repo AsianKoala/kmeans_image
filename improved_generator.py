@@ -154,12 +154,18 @@ def region_counts(img, pix, means):
                visited = bfs(x, y, visited, pix, w, h)
    return region_count
 
-def get_file_name():
-    folder_name = 'generated'
+def get_file_name(inp_file, k):
+    name = inp_file[:inp_file.find('.')]
     t = str(round(time.time() * 10000))
+    path = 'generated/' + name + '/'
     ext = '.png' 
-    file_name = t + ext
-    return folder_name + r'/' + file_name
+    file_name = t + '_' + 'kmeans-' + str(k) + ext
+    if not os.path.exists(path):
+        os.makedirs(path)
+        print('created folder:', path)
+    f = path + file_name
+    print('outputted to', f)
+    return f
 
 def main():
    k = int(sys.argv[2])
@@ -200,7 +206,7 @@ def main():
    #region_list = region_counts(img, pix, means)
    #print('region count:', region_list)
    
-   im_name = get_file_name()
+   im_name = get_file_name(file, k)
    img.save(im_name, 'PNG')  
    
 if __name__ == '__main__': 
