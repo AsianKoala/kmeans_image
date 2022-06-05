@@ -1,10 +1,10 @@
 import math
 import PIL
-from PIL import Image
+from PIL import Image, ImageTk
 import urllib.request
 import io, sys, os, random, time
 import tkinter as tk
-from PIL import Image, ImageTk  
+import shutil
 
 def check_move_count(mc):
    return [0] * len(mc) == mc
@@ -156,10 +156,9 @@ def region_counts(img, pix, means):
 
 def get_file_name(inp_file, k):
     name = inp_file[:inp_file.find('.')]
-    t = str(round(time.time() * 10000))
     path = 'generated/' + name + '/'
     ext = '.png' 
-    file_name = t + '_' + 'kmeans-' + str(k) + ext
+    file_name = name + '_' + 'kmeans-' + str(k) + ext
     if not os.path.exists(path):
         os.makedirs(path)
         print('created folder:', path)
@@ -168,6 +167,7 @@ def get_file_name(inp_file, k):
     return f
 
 def main():
+   start_time = time.time()
    k = int(sys.argv[2])
    file = str(sys.argv[1]) 
    if not os.path.isfile(file):
@@ -208,6 +208,13 @@ def main():
    
    im_name = get_file_name(file, k)
    img.save(im_name, 'PNG')  
+
+   end_time = time.time()
+   dt = end_time - start_time
+   min_taken = int(dt // 60)
+   sec_taken = int(dt % 60)
+   print('Finished in {}m {}s'.format(min_taken, sec_taken))
+
    
 if __name__ == '__main__': 
    main()
