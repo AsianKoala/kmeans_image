@@ -1,4 +1,3 @@
-
 import math
 import PIL
 from PIL import Image, ImageTk
@@ -136,35 +135,41 @@ def region_counts(img, pix, means):
                 visited = bfs(x, y, visited, pix, w, h)
     return region_count
 
-def get_file_name(inp_file, k):
-    name = inp_file[:inp_file.find('.')]
-    path = 'generated/' + name + '/'
-    ext = '.png' 
-    file_name = name + '_' + 'kmeans-' + str(k) + ext
-    if not os.path.exists(path):
-        os.makedirs(path)
-        print('created folder:', path)
-    f = path + file_name
-    print('outputted to', f)
-    return f
+def get_file_name(file_path: str, k):
+    if not os.path.isdir('generated'):
+        os.mkdir('generated')
+
+    file_name = None
+    if '/' not in file_path:
+        file_name = file_path
+    else:
+        file_name = file_path[file_path.rfind('/'):]
+
+    no_ext = file_name[:file_name.find('.')]
+    dir_path = './generated/' + no_ext
+    if not os.path.isdir(dir_path):
+        os.makedirs(dir_path)
+    final_path = dir_path + '/' + no_ext + '-kmeans-' + str(k) + '.png'
+    return final_path
+
 
 def main():
     start_time = time.time()
     k = int(sys.argv[2])
-    file = str(sys.argv[1]) 
+    file = str(sys.argv[1])
     if not os.path.isfile(file):
        file = io.BytesIO(urllib.request.urlopen(file).read())
-    
+
     img = Image.open(file)
-    pix = img.load()   
-    
+    pix = img.load()  
+
     print ('Size:', img.size[0], 'x', img.size[1])
     print ('Pixels:', img.size[0]*img.size[1])
 
     count_buckets = [0 for x in range(k)]
     move_count = [10 for x in range(k)]
     pix_dict = initialize_pixel_dict(img, pix)
-    
+
     d_count, m_col, m_count = distinct_pix_count(pix_dict)
     print ('Distinct pixel count:', d_count)
     print ('Most common pixel:', m_col, '=>', m_count)
@@ -175,7 +180,7 @@ def main():
     count = 0
     while not check_move_count(move_count):
        count += 1
-       count_buckets, move_count, means = clustering(img, pix, count_buckets, 
+       count_buckets, move_count, means = clustering(img, pix, count_buckets,
                move_count, means, count, pix_dict)
        if count == 1:
           print ('first means:', means)
@@ -188,16 +193,15 @@ def main():
 
     #region_list = region_counts(img, pix, means)
     #print('region count:', region_list)
-    
+
     im_name = get_file_name(file, k)
-    img.save(im_name, 'PNG')  
+    img.save(im_name, 'PNG') 
 
     end_time = time.time()
     dt = end_time - start_time
     min_taken = int(dt // 60)
     sec_taken = int(dt % 60)
     print('Finished in {}m {}s'.format(min_taken, sec_taken))
-
    
 if __name__ == '__main__': 
    main()

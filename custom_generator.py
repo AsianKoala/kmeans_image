@@ -175,6 +175,28 @@ def update_palette(palette, palette_pix, mean):
 def true_inp(inp):
     return inp.strip().lower()[0] == 'y'
 
+# todo: cahnge 
+def init_pix_mean_mapper(img, pix, old_means):
+    pix_mean_mapper = {}
+    w, h = img.size
+    for x in range(w):
+        for y in range(h):
+            p = pix[x,y]
+            d_index = mean_dist(p, old_means)
+            pix_mean_mapper[(x,y)] = d_index
+    return pix_mean_mapper
+
+#def update_changed_picture(img, pix, new_means, pix_mean_mapper):
+#    w, h = img.size
+#    new_means = [[int(y) for y in mean] for mean in new_means]
+#    new_means = [tuple(x) for x in new_means]
+#    for x in range(w):
+#        for y in range(h):
+#            old_mean_index = pix_mean_mapper[(x,y])
+#            new_mean = new_means[old_mean_index]
+#            pix[x,y] = new_mean
+#    return pix
+
 def main():
     start_time = time.time()
     k = int(sys.argv[2])
@@ -183,6 +205,7 @@ def main():
         file = io.BytesIO(urllib.request.urlopen(file).read())
     img = Image.open(file)
     pix = img.load()   
+    
     print ('Size:', img.size[0], 'x', img.size[1])
     print ('Pixels:', img.size[0]*img.size[1])
     d_count, m_col, m_count = distinct_pix_count(img, pix)
@@ -192,6 +215,7 @@ def main():
     move_count = [10 for x in range(k)]
     means = choose_means(k, img, pix)
     print ('kmeans++ chosen means', means)
+    
     pix_dict = initialize_pixel_dict(img, pix)
     count = 1
     while not check_move_count(move_count):
@@ -208,43 +232,37 @@ def main():
     for i in range(len(means)):
         print (i+1, ':', means[i], '=>', count_buckets[i])
 
-    #region_list = region_counts(img, pix, means)
-    #print('region count:', region_list)
-
-    #im_name = get_file_name(file, k)
-    #img.save(im_name, 'PNG')  
-
     end_time = time.time()
     dt = end_time - start_time
     min_taken = int(dt // 60)
     sec_taken = int(dt % 60)
     print('{}m {}s taken'.format(min_taken, sec_taken))
-
     img.show()
-
+    
     change_inp = input('Change means? (y/n) ')
     change = true_inp(change_inp)
-    
-    while change:
-        new_means = []
-        palette = Image.new('RGB', (400, 400))
-        palette_pix = palette.load()
-        for i, mean in enumerate(means):
-            new_mean = mean
-            print('displaying curr mean')
-            palette_pix = update_palette(palette, palette_pix, mean)
-            palette.show()
-            change_curr_mean = true_inp(input('Change mean {}? '.format(i+1)))
-            if change_curr_mean:
-                new_r = int(input('enter r: '))
-                new_g = int(input('enter g: '))
-                new_b = int(input('enter b: '))
-                new_mean = (new_r, new_g, new_b)
-            new_means.append(new_mean)
-        pix = update_picture(img, pix, new_means)
-        print('displaying new image')
-        img.show()
-        change = true_inp(input('Change means? (y/n) '))
+    if change:
+        pix_mean_mapper = init_pix_mean_mapper(img, pix, means)
+        while change:
+            new_means = []
+            palette = Image.new('RGB', (400, 400))
+            palette_pix = palette.load()
+            for i, mean in enumerate(means):
+                new_mean = mean
+                print('displaying mean {}'.format(i+1))
+                palette_pix = update_palette(palette, palette_pix, mean)
+                palette.show()
+                change_curr_mean = true_inp(input('Change mean {}? '.format(i+1)))
+                if change_curr_mean:
+                    new_r = int(input('enter r: '))
+                    new_g = int(input('enter g: '))
+                    new_b = int(input('enter b: '))
+                    new_mean = (new_r, new_g, new_b)
+                new_means.append(new_mean)
+            pix = update_picture(img, pix, new_means, pix_mean_mapper)
+            print('displaying new image')
+            img.show()
+            change = true_inp(input('Change means? (y/n) '))
 
     im_name = get_file_name(file, k)
     img.save(im_name, 'PNG')
