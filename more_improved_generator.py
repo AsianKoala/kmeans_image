@@ -1,10 +1,6 @@
-import math
-import PIL
-from PIL import Image, ImageTk
+from PIL import Image
 import urllib.request
 import io, sys, os, random, time
-import tkinter as tk
-import shutil
 import random
 
 def check_move_count(mc):
@@ -19,7 +15,7 @@ def choose_means(k, img, pix, pix_dict):
     center = pix[random.randint(0, w), random.randint(0, h)]
     centroids = [center]
 
-    for i in range(k-1):
+    for _ in range(k-1):
         candidates = []
         weights = []
         for p in pix_dict:
@@ -61,14 +57,13 @@ def cant_hop(pixel, mean_query, means):
     min_dist = min([color_dist(mean_query, m) for m in means])
     return d < min_dist / 4
 
-def clustering(img, pix, cb, mc, means, count, pix_dict):
-    temp_pb, temp_mc, temp_m = [[] for x in means], [], []
-    temp_cb = [0 for x in means]
-    w,h = img.size
+def clustering(cb, means, count, pix_dict):
+    temp_pb, temp_mc, temp_m = [[] for _ in means], [], []
+    temp_cb = [0 for _ in means]
     for p in pix_dict:
         pix_dict[p][1] = mean_dist(p, means)
         temp_cb[pix_dict[p][1]] += pix_dict[p][0]
-        for n in range(pix_dict[p][0]):
+        for _ in range(pix_dict[p][0]):
              temp_pb[pix_dict[p][1]].append(p)
     
     for i in range(len(means)):
@@ -166,8 +161,8 @@ def main():
     print ('Size:', img.size[0], 'x', img.size[1])
     print ('Pixels:', img.size[0]*img.size[1])
 
-    count_buckets = [0 for x in range(k)]
-    move_count = [10 for x in range(k)]
+    count_buckets = [0 for _ in range(k)]
+    move_count = [10 for _ in range(k)]
     pix_dict = initialize_pixel_dict(img, pix)
 
     d_count, m_col, m_count = distinct_pix_count(pix_dict)
@@ -180,8 +175,7 @@ def main():
     count = 0
     while not check_move_count(move_count):
        count += 1
-       count_buckets, move_count, means = clustering(img, pix, count_buckets,
-               move_count, means, count, pix_dict)
+       count_buckets, move_count, means = clustering(count_buckets, means, count, pix_dict)
        if count == 1:
           print ('first means:', means)
           print ('starting sizes:', count_buckets)
