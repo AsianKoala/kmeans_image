@@ -13,25 +13,24 @@ def color_dist(col1, col2):
     return sum([(col1[x] - col2[x])**2 for x in range(3)])
 
 # uses kmeans++
-def choose_means(k, img, pix):
+def choose_means(k, img, pix, pix_dict):
     w, h = img.size
     center = pix[random.randint(0, w), random.randint(0, h)]
     centroids = [center]
-    for i in range(k-1):
-        distances = []
-        for x in range(w):
-            for y in range(h):
-                p = pix[x,y]
-                min_dist = 1000000
-                min_p = None
-                for c in centroids:
-                    d = color_dist(c, p)
-                    if d < min_dist:
-                        min_dist = d
-                        min_p = p
-                distances.append((min_dist, p))
-        min_pair = max(distances)
-        centroids.append(min_pair[1])
+
+    for _ in range(k-1):
+        candidates = []
+        weights = []
+        for p in pix_dict:
+            if p in centroids: continue
+            deltas = []
+            for c in centroids:
+                deltas.append((color_dist(p, c), p))
+            min_pair = min(deltas)
+            candidates.append(min_pair[1])
+            weights.append((min_pair[0] * 50.0) ** 2)
+        chosen = random.choices(candidates, weights)[0]
+        centroids.append(chosen)
     return centroids
 
 def initialize_pixel_dict(img, pix): 
@@ -61,59 +60,41 @@ def cant_hop(pixel, mean_query, means):
     min_dist = min([color_dist(mean_query, m) for m in means])
     return d < min_dist / 4
 
+def clustering(cb, means, count, pix_dict):
+    temp_pb, temp_mc, temp_m = [[] for _ in means], [], []
+    temp_cb = [0 for _ in means]
+    for p in pix_dict:
+        pix_dict[p][1] = mean_dist(p, means)
+        temp_cb[pix_dict[p][1]] += pix_dict[p][0]
+        for _ in range(pix_dict[p][0]):
+             temp_pb[pix_dict[p][1]].append(p)
+    
+    for i in range(len(means)):
+       if temp_cb[i] == 0:
+          temp_m.append(means[i])
+       else:
+        sums = [sum([p[x] for p in temp_pb[i]]) for x in range(3)]
+        temp_m.append([sums[x] / temp_cb[i] for x in range(3)])
 
-def clustering(img, pix, cb, mc, means, count, pix_dict):
-   temp_pb, temp_mc, temp_m = [[] for x in means], [], []
-   temp_cb = [0 for x in means]
-   w,h = img.size
-   for p in pix_dict:
-       #if not pix_dict[p][2]:
-       #    d_index = mean_dist(p, means)
-       #    pix_dict[p][1] = d_index
-       #    m = means[d_index]
-       #    if cant_hop(p, m, means):
-       #        pix_dict[p][2] = True
-       pix_dict[p][1] = mean_dist(p, means)
-       temp_cb[pix_dict[p][1]] += pix_dict[p][0]
-       for n in range(pix_dict[p][0]):
-            temp_pb[pix_dict[p][1]].append(p)
-   
-   for i in range(len(means)):
-      if temp_cb[i] == 0:
-         temp_m.append(means[i])
-      else:
-       sums = [sum([p[x] for p in temp_pb[i]]) for x in range(3)]
-       temp_m.append([sums[x] / temp_cb[i] for x in range(3)])
-   temp_mc = [ (a-b) for a, b in zip(temp_cb, cb)]
-   print ('diff', count, ':', temp_mc)
-   return temp_cb, temp_mc, temp_m
+    temp_mc = [ (a-b) for a, b in zip(temp_cb, cb)]
+    print ('diff', count, ':', temp_mc)
+    return temp_cb, temp_mc, temp_m
 
-def update_picture(img, pix, means):
+def update_picture(img, pix, means, pix_dict):
     w,h = img.size
     means = [[int(x) for x in y] for y in means]
     for x in range(w):
         for y in range(h):
-            d = mean_dist(pix[x,y], means)
-            p = means[d]
-            pix[x,y] = tuple(p)
+            p = pix[x,y]
+            col = means[pix_dict[p][1]]
+            pix[x,y] = tuple(col)
+
     return pix 
    
-def distinct_pix_count(img, pix):
-    cols = {}
-    w, h = img.size
-    for x in range(w):
-        for y in range(h):
-            pixel = pix[x,y]
-            if pixel in cols:
-                cols[pixel]+=1
-            else:
-                cols[pixel]=1
-    max_col, max_count = pix[0, 0], 0
-    for color, num in cols.items():
-        if num > max_count:
-            max_count = num
-            max_col = color
-    return len(cols.keys()), max_col, max_count
+def distinct_pix_count(pix_dict):
+    pairs = [(data[0], p) for p, data in pix_dict.items()]
+    max_pair = max(pairs)
+    return len(pix_dict), max_pair[1], max_pair[0]
 
 def valid(x, y, w, h):
     if x < 0 or y < 0: return False
@@ -130,11 +111,11 @@ def bfs(x, y, vis, pix, w, h):
         y = c[1]
         col = pix[x,y]
         def l(nx,ny):
-            if valid(nx,ny,w,h) and not vis[nx][ny] and pix[nx,ny] == col:
+            if valid(nx, ny, w, h) and not vis[nx][ny] and pix[nx,ny] == col:
                 q.append([nx,ny])
                 vis[nx][ny] = True
-        for i in range(-1,2):
-            for j in range(-1,2):
+        for i in range(-1, 2):
+            for j in range(-1, 2):
                 if i != x and j != y:
                     l(x+i, y+j)
     return vis
@@ -152,30 +133,26 @@ def region_counts(img, pix, means):
                 visited = bfs(x, y, visited, pix, w, h)
     return region_count
 
-def get_file_name(inp_file, k):
-    name = inp_file[:inp_file.find('.')]
-    path = 'generated/' + name + '/'
-    ext = '.png' 
-    file_name = name + '_' + 'kmeans-' + str(k) + ext
-    if not os.path.exists(path):
-        os.makedirs(path)
-        print('created folder:', path)
-    f = path + file_name
-    print('outputted to', f)
-    return f
+def get_file_name(file_path: str, k):
+    if not os.path.isdir('generated'):
+        os.mkdir('generated')
 
-def update_palette(palette, palette_pix, mean):
-    w, h = palette.size
-    mean = tuple([int(x) for x in mean])
-    for x in range(w):
-        for y in range(h):
-            palette_pix[x,y] = mean
-    return palette_pix
+    file_name = None
+    if '/' not in file_path:
+        file_name = file_path
+    else:
+        file_name = file_path[file_path.rfind('/'):]
+
+    no_ext = file_name[:file_name.find('.')]
+    dir_path = './generated/' + no_ext
+    if not os.path.isdir(dir_path):
+        os.makedirs(dir_path)
+    final_path = dir_path + '/' + no_ext + '-kmeans-' + str(k) + '.png'
+    return final_path
 
 def true_inp(inp):
     return inp.strip().lower()[0] == 'y'
 
-# todo: cahnge 
 def init_pix_mean_mapper(img, pix, old_means):
     pix_mean_mapper = {}
     w, h = img.size
@@ -186,58 +163,73 @@ def init_pix_mean_mapper(img, pix, old_means):
             pix_mean_mapper[(x,y)] = d_index
     return pix_mean_mapper
 
-#def update_changed_picture(img, pix, new_means, pix_mean_mapper):
-#    w, h = img.size
-#    new_means = [[int(y) for y in mean] for mean in new_means]
-#    new_means = [tuple(x) for x in new_means]
-#    for x in range(w):
-#        for y in range(h):
-#            old_mean_index = pix_mean_mapper[(x,y])
-#            new_mean = new_means[old_mean_index]
-#            pix[x,y] = new_mean
-#    return pix
+def update_changed_picture(img, pix, new_means, pix_mean_mapper):
+   w, h = img.size
+   new_means = [[int(y) for y in mean] for mean in new_means]
+   new_means = [tuple(x) for x in new_means]
+   for x in range(w):
+       for y in range(h):
+           old_mean_index = pix_mean_mapper[(x,y)]
+           new_mean = new_means[old_mean_index]
+           pix[x,y] = new_mean
+   return pix
+
+def update_palette(palette, palette_pix, mean):
+    w, h = palette.size
+    mean = tuple([int(x) for x in mean])
+    for x in range(w):
+        for y in range(h):
+            palette_pix[x,y] = mean
+    return palette_pix
 
 def main():
     start_time = time.time()
     k = int(sys.argv[2])
-    file = str(sys.argv[1]) 
+    file = str(sys.argv[1])
     if not os.path.isfile(file):
-        file = io.BytesIO(urllib.request.urlopen(file).read())
+       file = io.BytesIO(urllib.request.urlopen(file).read())
+
     img = Image.open(file)
-    pix = img.load()   
-    
+    pix = img.load()  
+
     print ('Size:', img.size[0], 'x', img.size[1])
     print ('Pixels:', img.size[0]*img.size[1])
-    d_count, m_col, m_count = distinct_pix_count(img, pix)
+
+    count_buckets = [0 for _ in range(k)]
+    move_count = [10 for _ in range(k)]
+    pix_dict = initialize_pixel_dict(img, pix)
+
+    d_count, m_col, m_count = distinct_pix_count(pix_dict)
     print ('Distinct pixel count:', d_count)
     print ('Most common pixel:', m_col, '=>', m_count)
-    count_buckets = [0 for x in range(k)]
-    move_count = [10 for x in range(k)]
-    means = choose_means(k, img, pix)
-    print ('kmeans++ chosen means', means)
-    
-    pix_dict = initialize_pixel_dict(img, pix)
-    count = 1
-    while not check_move_count(move_count):
-        count += 1
-        count_buckets, move_count, means = clustering(img, pix, count_buckets, 
-                move_count, means, count, pix_dict)
-        if count == 2:
-            print ('first means:', means)
-            print ('starting sizes:', count_buckets)
 
-    pix = update_picture(img, pix, means)  
+    means = choose_means(k, img, pix, pix_dict)
+    print ('kmeans++ chosen means', means)
+
+    count = 0
+    while not check_move_count(move_count):
+       count += 1
+       count_buckets, move_count, means = clustering(count_buckets, means, count, pix_dict)
+       if count == 1:
+          print ('first means:', means)
+          print ('starting sizes:', count_buckets)
+    pix = update_picture(img, pix, means, pix_dict)
     print ('Final sizes:', count_buckets)
     print ('Final means:')
     for i in range(len(means)):
-        print (i+1, ':', means[i], '=>', count_buckets[i])
+       print (i+1, ':', means[i], '=>', count_buckets[i])
+
+    #region_list = region_counts(img, pix, means)
+    #print('region count:', region_list)
+
+    im_name = get_file_name(file, k)
+    img.save(im_name, 'PNG') 
 
     end_time = time.time()
     dt = end_time - start_time
     min_taken = int(dt // 60)
     sec_taken = int(dt % 60)
-    print('{}m {}s taken'.format(min_taken, sec_taken))
-    img.show()
+    print('Finished in {}m {}s'.format(min_taken, sec_taken))
     
     change_inp = input('Change means? (y/n) ')
     change = true_inp(change_inp)
@@ -251,7 +243,7 @@ def main():
                 new_mean = mean
                 print('displaying mean {}'.format(i+1))
                 palette_pix = update_palette(palette, palette_pix, mean)
-                palette.show()
+                # palette.show()
                 change_curr_mean = true_inp(input('Change mean {}? '.format(i+1)))
                 if change_curr_mean:
                     new_r = int(input('enter r: '))
@@ -259,9 +251,9 @@ def main():
                     new_b = int(input('enter b: '))
                     new_mean = (new_r, new_g, new_b)
                 new_means.append(new_mean)
-            pix = update_picture(img, pix, new_means, pix_mean_mapper)
+            pix = update_changed_picture(img, pix, new_means, pix_mean_mapper)
             print('displaying new image')
-            img.show()
+            # img.show()
             change = true_inp(input('Change means? (y/n) '))
 
     im_name = get_file_name(file, k)
